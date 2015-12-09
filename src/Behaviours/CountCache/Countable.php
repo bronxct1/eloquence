@@ -10,6 +10,7 @@ trait Countable
     {
         static::created(function ($model) {
             $countCache = new CountCache($model);
+
             $countCache->apply(function ($config) use ($countCache, $model) {
                 $countCache->updateCacheRecord($config, '+', 1, $model->{$config['foreignKey']});
             });
@@ -22,6 +23,16 @@ trait Countable
         static::deleted(function ($model) {
             $countCache = new CountCache($model);
             $countCache->apply(function ($config) use ($countCache, $model) {
+                if (isset($config['polymorphic'])) {
+                    $relations = $model->{strtolower($config['model'])};
+
+                    if ($relations) {
+                        foreach ($relations as $relation) {
+                            $countCache->updateCacheRecord($config, '-', 1, $relation->id);
+                        }
+                    }
+                }
+
                 $countCache->updateCacheRecord($config, '-', 1, $model->{$config['foreignKey']});
             });
         });

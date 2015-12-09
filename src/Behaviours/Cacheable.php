@@ -34,16 +34,25 @@ trait Cacheable
 
         $modelTable = $this->getModelTable($model);
 
+        $modelMorphClass = $model->getMorphClass();
+
         if (is_null($aggregateField)) {
             $aggregateField = $config['foreignKey'];
         } else {
             $aggregateField = snake_case($aggregateField);
         }
 
-        $sql = "UPDATE `{$config['table']}` INNER JOIN (" .
-            "SELECT `{$config['foreignKey']}`, {$command}(`{$aggregateField}`) AS aggregate FROM `{$modelTable}` GROUP BY `{$config['foreignKey']}`) a " .
-            "ON (a.`{$config['foreignKey']}` = `{$config['table']}`.`{$config['key']}`" .
-            ") SET `{$config['field']}` = aggregate";
+        if (!$config['polymorphic']) {
+            $sql = "UPDATE `{$config['table']}` INNER JOIN (" .
+                "SELECT `{$config['foreignKey']}`, {$command}(`{$aggregateField}`) AS aggregate FROM `{$modelTable}` GROUP BY `{$config['foreignKey']}`) a " .
+                "ON (a.`{$config['foreignKey']}` = `{$config['table']}`.`{$config['key']}`" .
+                ") SET `{$config['field']}` = aggregate";
+        } else {
+            $sql = "UPDATE `{$config['table']}` INNER JOIN (" .
+                "SELECT `{$config['foreignKey']}`, COUNT(`{$config['foreignKey']}`) AS aggregate FROM `{$config['name']}s` WHERE `{$config['name']}_type` = '{$modelMorphClass}' GROUP BY `{$config['foreignKey']}`)" .
+                "a ON(a . `{$config['foreignKey']}` = `{$config['table']}` . `id`)" .
+                "SET `{$config['field']}` = aggregate";
+        }
 
         return DB::update($sql);
     }
@@ -75,10 +84,12 @@ trait Cacheable
     {
         return [
             'model'      => $config['model'],
-            'table'      => $this->getModelTable($config['model']),
+            'table'      => isset($config['table']) ? $config['table'] : $this->getModelTable($config['model']),
+            'name'       => isset($config['name']) ? $config['name'] : '',
             'field'      => snake_case($config['field']),
             'key'        => snake_case($this->key($config['key'])),
             'foreignKey' => snake_case($this->key($config['foreignKey'])),
+            'polymorphic' => isset($config['polymorphic']) ? $config['polymorphic'] : false
         ];
     }
 
